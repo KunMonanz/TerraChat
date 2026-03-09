@@ -1,0 +1,24 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+fastapi = "*"
+tortoise-orm = "*"
+fastapi-admin = "*"
+asyncpg = "*"
+aiosqlite = "*"
+uvicorn = "*"
+passlib = {extras = ["bcrypt"], version = "*"}
+pyjwt = "*"
+python-dotenv = "*"
+pydantic = {extras = ["email"], version = "*"}
+argon2-cffi = "*"
+aerich = "*"
+geoip2 = "*"
+
+[dev-packages]
+
+[requires]
+python_version = "3.13"
