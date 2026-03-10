@@ -1,4 +1,3 @@
-from fastapi import Depends
 from fastapi import APIRouter, HTTPException, Request, Depends
 
 from core.config import create_token, get_current_user

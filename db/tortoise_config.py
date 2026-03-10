@@ -17,13 +17,15 @@ TORTOISE_ORM = {
         "cloud_models": {
             "models": [
                 "models.cloud.user_cloud",
+                "models.cloud.question_cloud",
                 "aerich.models"
             ],
             "default_connection": "postgres",
         },
         "local_models": {
             "models": [
-                "models.local.user_local"
+                "models.local.user_local",
+                "models.local.question_local",
             ],
             "default_connection": "sqlite",
         },

@@ -1,5 +1,3 @@
-from dataclasses import dataclass
-
 from fastapi import HTTPException
 
 from models.cloud.user_cloud import CloudUser
