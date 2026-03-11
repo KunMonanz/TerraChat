@@ -1,7 +1,8 @@
+from uuid import UUID
 from models.local.question_local import QuestionLocal
 from models.cloud.question_cloud import QuestionCloud
 from models.local.user_local import LocalUser
-
+from questions.schemas import UserEditQuestion
 
 class QuestionRepository:
 
@@ -17,3 +18,26 @@ class QuestionRepository:
         )
 
         return question_local
+
+    async def get_local_question(
+        self,
+        question_id: UUID,
+        user: LocalUser
+    ) -> QuestionLocal | None:
+
+        question_local = await QuestionLocal.get_or_none(id=question_id, user=user)
+        return question_local
+
+    async def edit_local_question(
+        self,
+        question_id: UUID,
+        user: LocalUser,
+        edit_question: UserEditQuestion
+    ) -> QuestionLocal | None:
+
+        rows_affected = await QuestionLocal.filter(id=question_id, user=user).update(question_text=edit_question.question_text)
+
+        if rows_affected > 0:
+            return await QuestionLocal.get_or_none(id=question_id)
+
+        return None

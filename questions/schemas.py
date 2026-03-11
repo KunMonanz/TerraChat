@@ -1,4 +1,5 @@
 from pydantic import BaseModel, EmailStr
+from typing import Optional
 from uuid import UUID
 
 
@@ -9,4 +10,8 @@ class QuestionResponse(BaseModel):
 
 
 class CreateQuestion(BaseModel):
+    question_text: str
+
+
+class UserEditQuestion(BaseModel):
     question_text: str
