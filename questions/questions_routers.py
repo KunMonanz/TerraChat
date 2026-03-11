@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Response
 
 from core.config import create_token, get_current_user
 from repositories.questions_repository import QuestionRepository
@@ -50,3 +50,23 @@ async def edit_local_question(
     if question is None:
         raise HTTPException(detail="question not found",
                             status_code=status.HTTP_401_UNAUTHORIZED)
+
+
+@router.delete("/{question_id}")
+async def delete_local_question(
+    question_id: UUID,
+    current_user=Depends(get_current_user)
+):
+    question_repository = QuestionRepository()
+    deleted_question = question_repository.delete_local_question(
+        user=current_user,
+        question_id=question_id
+    )
+    if deleted_question:
+        return Response(
+            status_code=status.HTTP_204_NO_CONTENT
+        )
+    raise HTTPException(
+        detail="Question not found",
+        status_code=status.HTTP_404_NOT_FOUND
+    )

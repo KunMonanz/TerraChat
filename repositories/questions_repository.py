@@ -41,3 +41,16 @@ class QuestionRepository:
             return await QuestionLocal.get_or_none(id=question_id)
 
         return None
+
+    async def delete_local_question(
+        self,
+        question_id: UUID,
+        user: LocalUser
+    ) -> bool:
+
+        deleted_count = await QuestionLocal.filter(
+            id=question_id,
+            user=user
+        ).delete()
+
+        return deleted_count > 1
