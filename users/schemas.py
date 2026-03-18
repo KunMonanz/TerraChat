@@ -24,3 +24,7 @@ class ProfileSchema(BaseModel):
     username: str
     email: str
     location: str
+
+
+class EditUsernameSchema(BaseModel):
+    username: str

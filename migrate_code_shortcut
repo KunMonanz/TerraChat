@@ -1,0 +1,4 @@
+aerich --app local_models migrate
+aerich --app local_models upgrade
+aerich --app cloud_models migrate
+aerich --app cloud_models upgrade
