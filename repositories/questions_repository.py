@@ -1,4 +1,5 @@
 from uuid import UUID
+from models.local.changes_model import Changes
 from models.local.question_local import QuestionLocal
 from models.cloud.question_cloud import QuestionCloud
 from models.local.user_local import LocalUser
@@ -36,6 +37,16 @@ class QuestionRepository:
     ) -> QuestionLocal | None:
 
         rows_affected = await QuestionLocal.filter(id=question_id, user=user).update(question_text=edit_question.question_text)
+
+        payload = {
+            "question": edit_question.question_text
+        }
+
+        await Changes.create(
+            change_type="UPDATE",
+            model="questions",
+            payload=payload
+        )
 
         if rows_affected > 0:
             return await QuestionLocal.get_or_none(id=question_id)

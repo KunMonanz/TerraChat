@@ -5,7 +5,6 @@ name = "pypi"
 
 [packages]
 fastapi = "*"
-tortoise-orm = "*"
 fastapi-admin = "*"
 asyncpg = "*"
 aiosqlite = "*"
@@ -15,8 +14,9 @@ pyjwt = "*"
 python-dotenv = "*"
 pydantic = {extras = ["email"], version = "*"}
 argon2-cffi = "*"
-aerich = "*"
 geoip2 = "*"
+tortoise-orm = ">=1.1.4"
+aerich = "*"
 
 [dev-packages]
 
