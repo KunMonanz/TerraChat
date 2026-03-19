@@ -12,6 +12,10 @@ class Changes(models.Model):
     change_type = fields.CharField(max_length=6)
     payload = fields.JSONField()
     model = fields.CharField(max_length=100)
+    user = fields.ForeignKeyField(
+        "local_models.LocalUser",
+        related_name="changes"
+    )
     used = fields.BooleanField(default=False)
     created_at = fields.DatetimeField(auto_now_add=True)
 

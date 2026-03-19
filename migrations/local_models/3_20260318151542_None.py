@@ -23,8 +23,10 @@ CREATE TABLE IF NOT EXISTS "changes" (
     "id" CHAR(36) NOT NULL PRIMARY KEY,
     "change_type" VARCHAR(6) NOT NULL,
     "payload" JSON NOT NULL,
+    "model" VARCHAR(100) NOT NULL,
     "used" INT NOT NULL,
-    "created_at" TIMESTAMP NOT NULL
+    "created_at" TIMESTAMP NOT NULL,
+    "user_id" CHAR(36) NOT NULL REFERENCES "users" ("id") ON DELETE CASCADE
 );"""
 
 

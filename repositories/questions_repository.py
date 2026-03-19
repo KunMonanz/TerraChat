@@ -18,6 +18,16 @@ class QuestionRepository:
             user=user
         )
 
+        payload = {
+            "question_text": question_text
+        }
+
+        await Changes.create(
+            change_type="CREATE",
+            payload=payload,
+            model="questions",
+            user=user
+        )
         return question_local
 
     async def get_local_question(
@@ -45,7 +55,8 @@ class QuestionRepository:
         await Changes.create(
             change_type="UPDATE",
             model="questions",
-            payload=payload
+            payload=payload,
+            user=user
         )
 
         if rows_affected > 0:
@@ -63,5 +74,16 @@ class QuestionRepository:
             id=question_id,
             user=user
         ).delete()
+
+        payload = {
+            "question_id": question_id
+        }
+
+        await Changes.create(
+            change_type="DELETE",
+            model="question",
+            payload=payload,
+            user=user
+        )
 
         return deleted_count > 1
