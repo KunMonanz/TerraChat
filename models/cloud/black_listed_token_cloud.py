@@ -5,10 +5,8 @@ from tortoise import fields, models
 from models.base.black_listed_token_base import BlackListedTokenBase
 
 
-class BlackListedToken(BlackListedTokenBase):
-
-    is_synced = fields.BooleanField(default=False)
+class BlackListedTokenCloud(BlackListedTokenBase):
 
     class Meta:
-        app = "local_models"
+        app = "cloud_models"
         table = "blacklisted_tokens"
