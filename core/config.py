@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
+from models.local.black_listed_token_model import BlackListedToken
 from models.local.user_local import LocalUser
 
 load_dotenv()
@@ -37,15 +38,34 @@ def decode_access_token(token: str):
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
-    payload = decode_access_token(token)
-    if not payload or "sub" not in payload:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    user_id = payload["sub"]
+    credential_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload: dict | None = decode_access_token(token)
+
+        user_id: str | None = payload.get("sub")
+        jti: str | None = payload.get("jti")
+
+        if user_id is None or jti is None:
+            raise credential_exception
+
+        token_is_blacklisted = await BlackListedToken.filter(
+            token_jti=jti
+        ).exists()
+        if token_is_blacklisted:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token has been revoked",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    except jwt.PyJWKError:
+        raise credential_exception
+
     user = await LocalUser.get_or_none(id=user_id)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise credential_exception
     return user

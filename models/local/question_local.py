@@ -7,6 +7,7 @@ class QuestionLocal(QuestionBase):
         "local_models.LocalUser",
         related_name="questions"
     )
+    is_synced = fields.BooleanField(default=False)
 
     class Meta:
         app = "local_models"

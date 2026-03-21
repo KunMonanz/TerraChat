@@ -27,6 +27,7 @@ TORTOISE_ORM = {
                 "models.local.user_local",
                 "models.local.question_local",
                 "models.local.changes_model",
+                "models.local.black_listed_token_model"
             ],
             "default_connection": "sqlite",
         },
