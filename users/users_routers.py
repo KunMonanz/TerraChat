@@ -16,6 +16,7 @@ from models.local.user_local import LocalUser
 from utils.geolocation import get_location_from_ip
 
 from .schemas import (
+    EditLocationSchema,
     EditUsernameSchema,
     LoginSchema,
     UserCreate,
@@ -29,12 +30,12 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
+user_repository = UserRepository()
+
 
 @router.post("/", response_model=UserResponse)
 async def create_user(user: UserCreate, request: Request):
     location = get_location_from_ip(request)
-    user_repository = UserRepository()
-
     cloud_user = await user_repository.create_user(user, location)
 
     return UserResponse(
@@ -59,7 +60,6 @@ async def login(data: LoginSchema):
 
 @router.post("/logout")
 async def logout(token: str = Depends(oauth2_scheme)):
-    user_repository = UserRepository()
     await user_repository.get_or_create_blacklisted_token(token)
     return {
         "detail": "Successfully logged out"
@@ -76,9 +76,23 @@ async def edit_username(
     username_edit: EditUsernameSchema,
     current_user=Depends(get_current_user)
 ):
-    user_repository = UserRepository()
+    """
+        Edit username
+    """
     username_edit_user = await user_repository.edit_username(
         user=current_user,
         username_edit=username_edit
     )
     return username_edit_user
+
+
+@router.patch("/location", response_model=UserResponse)
+async def edit_location(
+    location_edit: EditLocationSchema,
+    current_user=Depends(get_current_user)
+):
+    user_with_edited_location = await user_repository.edit_location(
+        location_edit=location_edit,
+        user=current_user
+    )
+    return user_with_edited_location

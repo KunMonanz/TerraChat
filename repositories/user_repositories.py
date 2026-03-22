@@ -14,7 +14,7 @@ from tortoise.exceptions import IntegrityError
 
 from core.security import hash_password
 from services.token_decode import derive_from_decode
-from users.schemas import EditUsernameSchema, UserCreate
+from users.schemas import EditLocationSchema, EditUsernameSchema, UserCreate
 
 
 class UserRepository:
@@ -145,3 +145,38 @@ class UserRepository:
                 user=user,
                 using_db=local_conn
             )
+
+    async def edit_location(
+        self,
+        location_edit: EditLocationSchema,
+        user
+    ):
+        location = location_edit.location.strip().capitalize()
+        async with in_transaction("sqlite") as local_conn:
+            rows_affected = await LocalUser.filter(
+                id=user.id,
+            ).using_db(local_conn).update(
+                location=location,
+            )
+
+            if rows_affected == 0:
+                return None
+
+            await Changes.create(
+                change_type="UPDATE",
+                payload={"location": location},
+                model="users",
+                user=user,
+                using_db=local_conn
+            )
+
+            user = await LocalUser.get_or_none(
+                id=user.id,
+                using_db=local_conn
+            )
+
+            if user:
+                user.is_synced = False
+                await user.save()
+
+                return user
