@@ -1,13 +1,19 @@
+from datetime import datetime, timezone
+
 from fastapi import HTTPException, status
 
+from core.config import decode_access_token
 from models.base.user_base import UserBase
 from models.cloud.user_cloud import CloudUser
+from models.local.black_listed_token_model import BlackListedToken
+from models.local.changes_model import Changes
 from models.local.user_local import LocalUser
 
 from tortoise.transactions import in_transaction
 from tortoise.exceptions import IntegrityError
 
 from core.security import hash_password
+from services.token_decode import derive_from_decode
 from users.schemas import EditUsernameSchema, UserCreate
 
 
@@ -107,3 +113,35 @@ class UserRepository:
 
         user.username = username_edit.username
         return user
+
+    async def get_or_create_blacklisted_token(
+        self,
+        token: str,
+    ):
+        token_decode = await derive_from_decode(token)
+
+        jti = token_decode.get("jti")
+        expires_at = token_decode.get("exp")
+        user = token_decode.get("user")
+
+        async with in_transaction("sqlite") as local_conn:
+            black_listed_token = await BlackListedToken.get_or_create(
+                token_jti=jti,
+                defaults={
+                    "expires_at": expires_at
+                },
+                using_db=local_conn
+            )
+
+            payload = {
+                "token_jti": jti,
+                "expires_at": str(expires_at)
+            }
+
+            await Changes.create(
+                change_type="CREATE",
+                payload=payload,
+                model="blacklisted_tokens",
+                user=user,
+                using_db=local_conn
+            )

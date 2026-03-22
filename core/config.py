@@ -1,4 +1,5 @@
 import os
+import uuid
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 import jwt
@@ -21,20 +22,21 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/login")
 
 
 async def create_token(user_id: UUID):
+    jti = uuid.uuid4().hex
     payload = {
         "sub": str(user_id),
+        "jti": jti,
         "exp": datetime.now(timezone.utc) + timedelta(hours=24)
     }
-
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
-def decode_access_token(token: str):
+def decode_access_token(token: str) -> dict:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
-    except jwt.PyJWTError:
-        return None
+    except jwt.PyJWTError as e:
+        raise e
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):
@@ -43,9 +45,9 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
     try:
         payload: dict | None = decode_access_token(token)
-
         user_id: str | None = payload.get("sub")
         jti: str | None = payload.get("jti")
 
