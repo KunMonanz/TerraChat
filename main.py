@@ -4,7 +4,10 @@ from db.tortoise_config import TORTOISE_ORM
 from users.users_routers import router as user_router
 from questions.questions_routers import router as question_router
 
-app = FastAPI()
+app = FastAPI(
+    doc_urls="/docs",
+    swagger_ui_parameters={"syntaxHighligtht": False}
+)
 
 register_tortoise(
     app,

@@ -7,6 +7,7 @@ class QuestionResponse(BaseModel):
     id: UUID
     question_text: str
     answer_text: str
+    answer_type: str
 
 
 class CreateQuestion(BaseModel):
