@@ -1,15 +1,26 @@
-from datetime import datetime, timedelta, timezone
-import uuid
-
-import jwt
+# Run this once as a management script or temporary endpoint
+from models.local.changes_model import Changes
 
 
-payload = {
-    "sub": "test",
-    "jti": str(uuid.uuid4()),
-    "exp": datetime.now(timezone.utc) + timedelta(hours=24)
-}
-print("before: ", payload)
-token = jwt.encode(payload, "secret", algorithm="HS256")
-decoded = jwt.decode(token, "secret", algorithms=["HS256"])
-print("after: ", decoded)
+async def purge_bad_changes():
+    # Delete user UPDATE changes missing 'id' in payload
+    bad_user_updates = await Changes.filter(
+        model="users",
+        change_type="UPDATE",
+        used=False,
+    )
+    for change in bad_user_updates:
+        if "id" not in change.payload:
+            await change.delete()
+            print(f"Deleted bad user change: {change.id}")
+
+    # Delete question CREATE changes missing 'user_id' in payload
+    bad_question_creates = await Changes.filter(
+        model="questions",
+        change_type="CREATE",
+        used=False,
+    )
+    for change in bad_question_creates:
+        if "user_id" not in change.payload:
+            await change.delete()
+            print(f"Deleted bad question change: {change.id}")

@@ -3,6 +3,7 @@ import uuid
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 import jwt
+from jwt.exceptions import ExpiredSignatureError, InvalidTokenError
 from dotenv import load_dotenv
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -33,10 +34,20 @@ async def create_token(user_id: UUID):
 
 def decode_access_token(token: str) -> dict:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except jwt.PyJWTError as e:
-        raise e
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    except InvalidTokenError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme)):

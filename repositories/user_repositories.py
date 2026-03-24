@@ -114,10 +114,7 @@ class UserRepository:
         user.username = username_edit.username
         return user
 
-    async def get_or_create_blacklisted_token(
-        self,
-        token: str,
-    ):
+    async def get_or_create_blacklisted_token(self, token: str):
         token_decode = await derive_from_decode(token)
 
         jti = token_decode.get("jti")
@@ -125,58 +122,49 @@ class UserRepository:
         user = token_decode.get("user")
 
         async with in_transaction("sqlite") as local_conn:
-            black_listed_token = await BlackListedToken.get_or_create(
+            black_listed_token, created = await BlackListedToken.get_or_create(
                 token_jti=jti,
-                defaults={
-                    "expires_at": expires_at
-                },
-                using_db=local_conn
+                defaults={"expires_at": expires_at},
+                using_db=local_conn,
             )
 
-            payload = {
-                "token_jti": jti,
-                "expires_at": str(expires_at)
-            }
+            if created:
+                await Changes.create(
+                    change_type="CREATE",
+                    payload={
+                        "id": str(black_listed_token.id),
+                        "token_jti": jti,
+                        "expires_at": str(expires_at),
+                    },
+                    model="blacklisted_tokens",
+                    user=user,
+                    using_db=local_conn,
+                )
 
-            await Changes.create(
-                change_type="CREATE",
-                payload=payload,
-                model="blacklisted_tokens",
-                user=user,
-                using_db=local_conn
-            )
-
-    async def edit_location(
-        self,
-        location_edit: EditLocationSchema,
-        user
-    ):
+    async def edit_location(self, location_edit: EditLocationSchema, user):
         location = location_edit.location.strip().capitalize()
+
         async with in_transaction("sqlite") as local_conn:
             rows_affected = await LocalUser.filter(
                 id=user.id,
-            ).using_db(local_conn).update(
-                location=location,
-            )
+            ).using_db(local_conn).update(location=location)
 
             if rows_affected == 0:
                 return None
 
             await Changes.create(
                 change_type="UPDATE",
-                payload={"location": location},
+                payload={
+                    "id": str(user.id),
+                    "location": location,
+                },
                 model="users",
                 user=user,
-                using_db=local_conn
+                using_db=local_conn,
             )
 
-            user = await LocalUser.get_or_none(
-                id=user.id,
-                using_db=local_conn
-            )
-
+            user = await LocalUser.get_or_none(id=user.id, using_db=local_conn)
             if user:
                 user.is_synced = False
-                await user.save()
-
+                await user.save(using_db=local_conn)
                 return user

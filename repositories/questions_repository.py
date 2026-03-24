@@ -2,11 +2,8 @@ from uuid import UUID
 
 from models.local.changes_model import Changes
 from models.local.question_local import QuestionLocal
-from models.cloud.question_cloud import QuestionCloud
 from models.local.user_local import LocalUser
-
 from questions.schemas import UserEditQuestion
-
 from tortoise.transactions import in_transaction
 
 
@@ -27,7 +24,12 @@ class QuestionRepository:
 
             await Changes.create(
                 change_type="CREATE",
-                payload={"question_text": question_text},
+                payload={
+                    "id": str(question_local.id),       # ← PK for upsert
+                    "question_text": question_text,
+                    # ← remapped to cloud user_id at sync time
+                    "user_id": str(user.id),
+                },
                 model="questions",
                 user=user,
                 using_db=local_conn,
@@ -40,11 +42,7 @@ class QuestionRepository:
         question_id: UUID,
         user: LocalUser,
     ) -> QuestionLocal | None:
-
-        return await QuestionLocal.get_or_none(
-            id=question_id,
-            user=user
-        )
+        return await QuestionLocal.get_or_none(id=question_id, user=user)
 
     async def edit_local_question(
         self,
@@ -66,7 +64,10 @@ class QuestionRepository:
 
             await Changes.create(
                 change_type="UPDATE",
-                payload={"question": edit_question.question_text},
+                payload={
+                    "id": str(question_id),
+                    "question_text": edit_question.question_text,
+                },
                 model="questions",
                 user=user,
                 using_db=local_conn,
@@ -74,14 +75,21 @@ class QuestionRepository:
 
             question = await QuestionLocal.get_or_none(
                 id=question_id,
-                using_db=local_conn,
+                using_db=local_conn,        # ← same connection
             )
 
-            if question:
-                question.is_synced = False
-                await question.save()
+            if question is None:
+                return None
 
-                return question
+            await QuestionLocal.filter(id=question_id).using_db(local_conn).update(
+                is_synced=False             # ← update via filter, not instance.save()
+            )
+
+            # Re-fetch with is_synced updated
+            return await QuestionLocal.get_or_none(
+                id=question_id,
+                using_db=local_conn,
+            )
 
     async def delete_local_question(
         self,
@@ -100,7 +108,10 @@ class QuestionRepository:
 
             await Changes.create(
                 change_type="DELETE",
-                payload={"question_id": str(question_id)},
+                payload={
+                    # ← was "question_id", wrong key
+                    "id": str(question_id),
+                },
                 model="questions",
                 user=user,
                 using_db=local_conn,

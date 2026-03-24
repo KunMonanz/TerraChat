@@ -11,8 +11,10 @@ from fastapi.security import OAuth2PasswordBearer
 from core.config import create_token, get_current_user
 from core.security import verify_password
 
+from models.local.changes_model import Changes
 from models.local.user_local import LocalUser
 
+from services.sync_changes_services import SyncService
 from utils.geolocation import get_location_from_ip
 
 from .schemas import (
@@ -96,3 +98,44 @@ async def edit_location(
         user=current_user
     )
     return user_with_edited_location
+
+
+@router.post("/sync")
+async def trigger_sync(
+    current_user: LocalUser = Depends(get_current_user)
+):
+    service = SyncService()
+    stats = await service.sync(
+        user_id=str(current_user.id),
+        cloud_user_id=str(current_user.id),
+    )
+    return {
+        "status": "ok",
+        "stats": stats
+    }
+
+
+# @router.post("/purge-bad-changes")
+# async def purge_bad_changes():
+#     bad_user_updates = await Changes.filter(
+#         model="users",
+#         change_type="UPDATE",
+#         used=False,
+#     )
+#     deleted = 0
+#     for change in bad_user_updates:
+#         if "id" not in change.payload:
+#             await change.delete()
+#             deleted += 1
+
+#     bad_question_creates = await Changes.filter(
+#         model="questions",
+#         change_type="CREATE",
+#         used=False,
+#     )
+#     for change in bad_question_creates:
+#         if "user_id" not in change.payload:
+#             await change.delete()
+#             deleted += 1
+
+#     return {"deleted": deleted}
