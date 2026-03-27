@@ -49,12 +49,15 @@ class SyncWorker:
     async def _do_sync(self):
         from models.local.changes_model import Changes
 
-        user_ids = await Changes.filter(used=False).distinct().values_list("user_id", flat=True)
+        user_ids = await Changes.filter(used=False)\
+            .distinct()\
+            .values_list("user_id", flat=True)
         for user_id in user_ids:
             try:
-                cloud_user_id = user_id  # adjust if needed
+                cloud_user_id = user_id
                 stats = await self.sync_service.sync(user_id, cloud_user_id)
                 logger.info(
-                    f"[SYNC] user={user_id} success={stats['success']} failed={stats['failed']}")
+                    f"[SYNC] user={user_id} success={stats['success']} failed={stats['failed']}"
+                )
             except Exception as e:
                 logger.error(f"[SYNC ERROR] user={user_id}: {e}")
