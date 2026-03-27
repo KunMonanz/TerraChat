@@ -16,5 +16,5 @@ class BlackListedTokenBase(models.Model):
     expires_at = fields.DatetimeField()
     created_at = fields.DatetimeField(auto_now_add=True)
 
-    class Meta:
+    class Meta:  # type: ignore
         abstract = True

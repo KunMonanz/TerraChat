@@ -81,4 +81,11 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     user = await LocalUser.get_or_none(id=user_id)
     if not user:
         raise credential_exception
+
+    if user.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been deleted."
+        )
+
     return user

@@ -48,8 +48,12 @@ async def edit_local_question(
     )
 
     if question is None:
-        raise HTTPException(detail="question not found",
-                            status_code=status.HTTP_401_UNAUTHORIZED)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Question not found"
+        )
+
+    return question
 
 
 @router.delete("/{question_id}")

@@ -19,14 +19,7 @@ from users.schemas import EditLocationSchema, EditUsernameSchema, UserCreate
 
 class UserRepository:
 
-    async def create_user(
-        self,
-        user: UserCreate,
-        location,
-    ) -> CloudUser:
-
-        cloud_user = None
-
+    async def create_user(self, user: UserCreate, location) -> CloudUser:
         try:
             async with in_transaction("postgres") as cloud_conn:
                 cloud_user = await CloudUser.create(
@@ -39,30 +32,25 @@ class UserRepository:
 
         except IntegrityError:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail="Username or email already exists",
             )
 
-        try:
-            async with in_transaction("sqlite") as local_conn:
-                await LocalUser.create(
-                    id=cloud_user.id,
-                    username=cloud_user.username,
-                    hashed_password=cloud_user.hashed_password,
-                    email=cloud_user.email,
-                    location=cloud_user.location,
-                    using_db=local_conn,
-                )
-
-        except Exception:
-            async with in_transaction("postgres") as cloud_conn:
-                await CloudUser.filter(id=cloud_user.id)\
-                    .using_db(cloud_conn)\
-                    .delete()
-
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to sync user to local database",
+        # Log change instead of writing to local immediately
+        async with in_transaction("sqlite") as local_conn:
+            await Changes.create(
+                change_type="CREATE",
+                model="users",
+                payload={
+                    "id": str(cloud_user.id),
+                    "username": cloud_user.username,
+                    "email": cloud_user.email,
+                    "hashed_password": cloud_user.hashed_password,
+                    "location": cloud_user.location,
+                    "is_deleted": False,
+                },
+                user=str(cloud_user.id),
+                using_db=local_conn,
             )
 
         return cloud_user
@@ -71,48 +59,166 @@ class UserRepository:
         self,
         user: UserBase,
         username_edit: EditUsernameSchema,
-    ) -> UserBase | None:
+    ):
+        new_username = username_edit.username.lower().strip()
 
         try:
             async with in_transaction("postgres") as cloud_conn:
-                rows_affected = await CloudUser.filter(
-                    id=user.id,
-                ).using_db(cloud_conn).update(
-                    username=username_edit.username,
+                rows = await CloudUser.filter(id=user.id).using_db(cloud_conn).update(
+                    username=new_username
                 )
 
-                if rows_affected == 0:
+                if rows == 0:
                     return None
 
         except IntegrityError:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
+                status_code=400,
                 detail="Username already exists",
             )
 
-        try:
-            async with in_transaction("sqlite") as local_conn:
-                await LocalUser.filter(
-                    id=user.id,
-                ).using_db(local_conn).update(
-                    username=username_edit.username,
-                )
-
-        except Exception:
-            async with in_transaction("postgres") as cloud_conn:
-                await CloudUser.filter(
-                    id=user.id,
-                ).using_db(cloud_conn).update(
-                    username=user.username,
-                )
-
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to sync username edit to local database",
+        # Log change
+        async with in_transaction("sqlite") as local_conn:
+            await Changes.create(
+                change_type="UPDATE",
+                model="users",
+                payload={
+                    "id": str(user.id),
+                    "username": new_username,
+                },
+                user=str(user.id),
+                using_db=local_conn,
             )
 
-        user.username = username_edit.username
+        user.username = new_username
         return user
+
+    async def edit_location(self, location_edit: EditLocationSchema, user):
+        location = location_edit.location.strip().title()
+
+        async with in_transaction("postgres") as cloud_conn:
+            rows = await CloudUser.filter(id=user.id).using_db(cloud_conn).update(
+                location=location
+            )
+
+            if rows == 0:
+                return None
+
+        async with in_transaction("sqlite") as local_conn:
+            await Changes.create(
+                change_type="UPDATE",
+                model="users",
+                payload={
+                    "id": str(user.id),
+                    "location": location,
+                },
+                user=str(user.id),
+                using_db=local_conn,
+            )
+
+        user.location = location
+        return user
+
+    async def delete_account(self, user: UserBase):
+        cloud_conn = None
+        local_conn = None
+
+        try:
+            async with in_transaction("sqlite") as local_conn:
+                local_user = await LocalUser.get_or_none(
+                    id=user.id,
+                    using_db=local_conn
+                )
+
+                if local_user:
+                    await LocalUser.filter(id=user.id)\
+                        .using_db(local_conn)\
+                        .update(is_deleted=True)
+                else:
+                    local_user = await LocalUser.create(
+                        id=user.id,
+                        username=user.username,
+                        email=user.email,
+                        hashed_password=user.hashed_password,
+                        location=user.location,
+                        is_deleted=True,
+                        using_db=local_conn
+                    )
+
+                await Changes.create(
+                    change_type="DELETE",
+                    payload={"id": str(user.id), "is_deleted": True},
+                    model="users",
+                    user=local_user,
+                    using_db=local_conn
+                )
+
+            async with in_transaction("postgres") as cloud_conn:
+                rows_affected = await CloudUser.filter(id=user.id)\
+                    .using_db(cloud_conn)\
+                    .update(is_deleted=True)
+                if rows_affected == 0:
+                    raise Exception("Failed to delete user in cloud")
+
+            return True
+
+        except Exception as e:
+            if local_conn:
+                await LocalUser.filter(id=user.id)\
+                    .using_db(local_conn)\
+                    .update(is_deleted=False)
+
+                await Changes.filter(payload__id=str(user.id), model="users")\
+                    .using_db(local_conn)\
+                    .delete()
+            raise e
+
+    async def undelete_account(self, user_login: UserCreate):
+        """Atomically restore a soft-deleted user in local + cloud."""
+
+        user = await CloudUser.get_or_none(
+            username=user_login.username,
+            email=user_login.email
+        )
+
+        if not user:
+            return False
+
+        cloud_updated = False
+        try:
+            async with in_transaction("postgres") as cloud_conn:
+                user.is_deleted = False
+                await user.save(using_db=cloud_conn)
+                cloud_updated = True
+
+            async with in_transaction("sqlite") as local_conn:
+                local_user_instance = await LocalUser.get_or_none(
+                    id=user.id,
+                    using_db=local_conn
+                )
+
+                if not local_user_instance:
+                    await LocalUser.create(
+                        id=user.id,
+                        username=user.username,
+                        email=user.email,
+                        hashed_password=user.hashed_password,
+                        location=user.location,
+                        is_deleted=False,
+                        using_db=local_conn
+                    )
+                else:
+                    await LocalUser.filter(id=user.id).using_db(local_conn).update(
+                        is_deleted=False
+                    )
+
+            return True
+
+        except Exception as e:
+            if cloud_updated:
+                async with in_transaction("postgres") as cloud_conn:
+                    await CloudUser.filter(id=user.id).using_db(cloud_conn).update(is_deleted=True)
+            raise e
 
     async def get_or_create_blacklisted_token(self, token: str):
         token_decode = await derive_from_decode(token)
@@ -140,31 +246,3 @@ class UserRepository:
                     user=user,
                     using_db=local_conn,
                 )
-
-    async def edit_location(self, location_edit: EditLocationSchema, user):
-        location = location_edit.location.strip().capitalize()
-
-        async with in_transaction("sqlite") as local_conn:
-            rows_affected = await LocalUser.filter(
-                id=user.id,
-            ).using_db(local_conn).update(location=location)
-
-            if rows_affected == 0:
-                return None
-
-            await Changes.create(
-                change_type="UPDATE",
-                payload={
-                    "id": str(user.id),
-                    "location": location,
-                },
-                model="users",
-                user=user,
-                using_db=local_conn,
-            )
-
-            user = await LocalUser.get_or_none(id=user.id, using_db=local_conn)
-            if user:
-                user.is_synced = False
-                await user.save(using_db=local_conn)
-                return user

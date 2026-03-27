@@ -11,6 +11,7 @@ class UserBase(models.Model):
     email = fields.CharField(max_length=100, unique=True)
     hashed_password = fields.CharField(max_length=255)
     location = fields.CharField(max_length=100)
+    is_deleted = fields.BooleanField(default=False)
 
-    class Meta:
+    class Meta:  # type: ignore
         abstract = True

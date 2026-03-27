@@ -8,6 +8,6 @@ class QuestionCloud(QuestionBase):
         related_name="questions"
     )
 
-    class Meta:
+    class Meta:  # type: ignore
         app = "cloud_models"
         table = "questions"

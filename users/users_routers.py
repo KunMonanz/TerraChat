@@ -50,10 +50,19 @@ async def create_user(user: UserCreate, request: Request):
 @router.post("/login")
 async def login(data: LoginSchema):
     user = await LocalUser.get_or_none(username=data.username)
-    if not user or not verify_password(data.password, user.hashed_password):
+    if not user or not verify_password(
+        data.password,
+        user.hashed_password
+    ):
         raise HTTPException(
             status_code=401,
             detail="Invalid credentials"
+        )
+
+    if user.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This account has been deleted."
         )
 
     token = await create_token(user.id)
@@ -113,6 +122,40 @@ async def trigger_sync(
         "status": "ok",
         "stats": stats
     }
+
+
+@router.delete("/me/delete")
+async def delete_user_self(
+    token: str = Depends(oauth2_scheme),
+    current_user=Depends(get_current_user)
+):
+    try:
+        await user_repository.get_or_create_blacklisted_token(token)
+        deleted_user = await user_repository.delete_account(current_user)
+        if deleted_user:
+            return {
+                "detail": "You have deactivated your account"
+            }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to deactivate account: {str(e)}"
+        )
+
+
+@router.patch("/me/undelete")
+async def undelete_user_self(
+    user: UserCreate
+):
+    restored = await user_repository.undelete_account(user)
+    if restored:
+        return {"detail": "Your account has been restored"}
+
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="User not found"
+    )
 
 
 # @router.post("/purge-bad-changes")
